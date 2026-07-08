@@ -34,7 +34,8 @@ app.post('/api/connect', async (req, res) => {
   broadcastState('connecting');
 
   tiktokConnection = new TikTokLiveConnection(currentUsername, {
-    enableExtendedGiftInfo: true
+    enableExtendedGiftInfo: true,
+    signApiKey: process.env.EULER_API_KEY
   });
 
   tiktokConnection.connect()
