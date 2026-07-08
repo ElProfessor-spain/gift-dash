@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>GIFT DASH — Live Racing Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+  :root{
+    --bg:#0a0f1c;--bg-2:#0e1526;--panel:#121a2e;--panel-2:#17203a;
+    --lane-a:#142317;--lane-b:#182a1c;--line:#23304d;--text:#eef2fb;--dim:#8fa0c7;
+    --yellow:#ffd400;--cyan:#00e5ff;--pink:#ff3d7f;--green:#2ecc71;--red:#ff4d4d;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;min-height:100vh;}
+  .display{font-family:'Bebas Neue',sans-serif;letter-spacing:0.03em;}
+  .wrap{max-width:1100px;margin:0 auto;padding:20px 16px 50px;}
+
+  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;}
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand h1{font-family:'Bebas Neue',sans-serif;font-size:32px;margin:0;line-height:1;}
+  .brand h1 span{color:var(--yellow);}
+
+  .status{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:12px;}
+  .status .led{width:9px;height:9px;border-radius:50%;background:var(--dim);}
+  .status.connected .led{background:var(--green);box-shadow:0 0 8px var(--green);}
+  .status.connecting .led{background:var(--yellow);box-shadow:0 0 8px var(--yellow);animation:pulse 1s infinite;}
+  .status.error .led{background:var(--red);box-shadow:0 0 8px var(--red);}
+  @keyframes pulse{50%{opacity:0.3;}}
+
+  #setup{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;}
+  #setup h2{font-family:'Bebas Neue',sans-serif;font-size:22px;margin:0 0 4px;color:var(--yellow);}
+  #setup p.sub{color:var(--dim);font-size:13px;margin:0 0 18px;}
+
+  .connect-row{display:flex;gap:8px;margin-bottom:18px;}
+  .connect-row input{flex:1;background:var(--bg-2);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:12px;font-family:'JetBrains Mono',monospace;font-size:14px;min-height:44px;}
+  .connect-row button{min-height:44px;background:var(--cyan);color:#0a0f1c;border:none;border-radius:8px;padding:0 18px;font-weight:700;font-size:13px;}
+  .connect-msg{font-size:12px;color:var(--dim);min-height:16px;margin-bottom:14px;}
+  .connect-msg.err{color:var(--red);}
+
+  .team-row{display:grid;grid-template-columns:40px 1fr 34px;grid-template-rows:auto auto;gap:8px;align-items:center;margin-bottom:10px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;}
+  .team-row input{width:100%;background:var(--bg-2);border:1px solid var(--line);border-radius:6px;color:var(--text);padding:9px 10px;font-family:'JetBrains Mono',monospace;font-size:13px;min-height:40px;}
+  .team-row input[data-field="name"]{grid-column:2;grid-row:1;}
+  .team-row input[data-field="gift"]{grid-column:2;grid-row:2;}
+  .team-row .num{grid-row:1/span 2;color:var(--dim);text-align:center;font-weight:700;}
+  .team-row .rm{grid-row:1/span 2;background:none;border:1px solid var(--line);color:var(--pink);border-radius:6px;min-height:40px;font-size:15px;}
+
+  .setup-actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;align-items:center;}
+  button{cursor:pointer;font-family:'JetBrains Mono',monospace;}
+  .btn{background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:12px 16px;font-size:13px;font-weight:600;min-height:44px;}
+  .btn-add{color:var(--cyan);border-color:var(--cyan);}
+  .btn-primary{background:var(--yellow);color:#111;border:none;font-weight:700;padding:13px 22px;font-size:14px;border-radius:8px;min-height:48px;}
+  .btn-primary:disabled{opacity:0.4;}
+  .field label{display:block;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;}
+  .field input{width:100px;background:var(--bg-2);border:1px solid var(--line);border-radius:6px;color:var(--text);padding:9px 10px;min-height:40px;}
+
+  #race{display:none;}
+  .scoreboard-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
+  .scoreboard-head h2{font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--yellow);margin:0;}
+  .target-tag{color:var(--dim);font-size:12px;}
+  .target-tag b{color:var(--cyan);}
+
+  .lane{position:relative;background:linear-gradient(180deg,var(--lane-a),var(--lane-b));border:1px solid var(--line);border-radius:14px;margin-bottom:12px;padding:12px 14px 14px;}
+  .lane .lane-top{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+  .lane .tag{font-size:26px;line-height:1;}
+  .lane .name{font-size:15px;font-weight:700;flex:1;}
+  .lane .gift-label{font-size:11px;color:var(--dim);}
+  .lane .score{font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--cyan);min-width:36px;text-align:right;}
+  .lane .track{position:relative;height:14px;background:rgba(255,255,255,0.06);border-radius:999px;margin-top:2px;}
+  .lane .fill{position:absolute;left:0;top:0;bottom:0;width:0%;background:linear-gradient(90deg,var(--cyan),var(--green));border-radius:999px;transition:width .5s cubic-bezier(.2,.8,.2,1);}
+  .lane .runner{position:absolute;top:50%;transform:translate(-50%,-50%);left:0%;font-size:26px;transition:left .5s cubic-bezier(.2,.8,.2,1);filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5));}
+  .lane .finish{position:absolute;right:-2px;top:-6px;bottom:-6px;width:6px;background-image:repeating-linear-gradient(45deg,#fff 0 4px,#111 4px 8px);opacity:0.8;border-radius:2px;}
+  .lane.winner{outline:2px solid var(--green);box-shadow:0 0 20px rgba(46,204,113,0.35);}
+
+  .winner-banner{display:none;background:linear-gradient(90deg,rgba(46,204,113,0.15),rgba(0,229,255,0.1));border:1px solid var(--green);border-radius:10px;padding:16px 20px;margin-bottom:14px;align-items:center;gap:14px;}
+  .winner-banner.show{display:flex;}
+  .winner-banner .emoji{font-size:36px;}
+  .winner-banner h3{margin:0;font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--green);}
+  .winner-banner p{margin:2px 0 0;color:var(--dim);font-size:12px;}
+
+  .ticker{margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;height:150px;overflow-y:auto;font-size:12px;}
+  .ticker div{padding:3px 0;color:var(--dim);border-bottom:1px dashed rgba(255,255,255,0.05);}
+  .ticker div b{color:var(--text);}
+  .ticker div.hit b{color:var(--green);}
+
+  .end-actions{display:flex;gap:10px;margin-top:16px;}
+  .end-actions button{flex:1;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="brand"><h1>GIFT <span>DASH</span></h1></div>
+    <div class="status" id="statusPill"><div class="led"></div><span id="statusText">Not connected</span></div>
+  </div>
+
+  <div id="setup">
+    <h2>Connect your live &amp; build the race</h2>
+    <p class="sub">Enter your TikTok username. Once your live is on, this connects automatically and gifts race your animals with zero taps.</p>
+
+    <div class="connect-row">
+      <input type="text" id="usernameInput" placeholder="@yourtiktokusername">
+      <button id="connectBtn">Connect</button>
+    </div>
+    <div class="connect-msg" id="connectMsg"></div>
+
+    <div id="teamRows"></div>
+    <div class="setup-actions">
+      <button class="btn btn-add" id="addTeamBtn">+ Add racer</button>
+      <div style="flex:1"></div>
+      <div class="field"><label>Target score to win</label><input type="number" id="targetScore" value="20" min="3" max="500"></div>
+    </div>
+    <div style="margin-top:18px;"><button class="btn-primary" id="startBtn">Start Race →</button></div>
+  </div>
+
+  <div id="race">
+    <div class="winner-banner" id="winnerBanner">
+      <div class="emoji" id="winnerEmoji">🏆</div>
+      <div><h3 id="winnerText">We have a winner!</h3><p>Hit "Reset Scores" to run it back with the same lineup.</p></div>
+    </div>
+    <div class="scoreboard-head">
+      <h2>Race in progress</h2>
+      <div class="target-tag">First to <b id="targetShow">20</b> points wins — live gifts only</div>
+    </div>
+    <div id="lanes"></div>
+    <div class="ticker" id="ticker"></div>
+    <div class="end-actions">
+      <button class="btn" id="resetScoresBtn">↺ Reset Scores</button>
+      <button class="btn" id="mainMenuBtn">☰ Main Menu</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const ANIMALS = ["🦁","🐯","🐻","🐼","🦊","🐨","🐸","🐵","🐔","🦉","🐢","🐇","🐍","🐗","🐴","🦄","🦓","🐮","🐷","🦒","🐘","🦘","🐙","🐬","🦈","🦖"];
+let teams = [];
+let target = 20;
+let finished = false;
+const socket = io();
+
+function defaultTeam(i){ return {name:'', animal: ANIMALS[i % ANIMALS.length], gift:'', score:0}; }
+
+const teamRows = document.getElementById('teamRows');
+function renderSetup(){
+  teamRows.innerHTML = '';
+  teams.forEach((t, i) => {
+    const row = document.createElement('div');
+    row.className = 'team-row';
+    row.innerHTML = `
+      <div class="num">${t.animal}</div>
+      <input type="text" placeholder="Racer name" value="${t.name}" data-field="name" data-i="${i}">
+      <button class="rm" data-i="${i}">✕</button>
+      <input type="text" placeholder="Exact TikTok gift name (e.g. Rose, GG, Lion)" value="${t.gift}" data-field="gift" data-i="${i}">
+    `;
+    teamRows.appendChild(row);
+  });
+  teamRows.querySelectorAll('input').forEach(inp => inp.addEventListener('input', e => {
+    teams[+e.target.dataset.i][e.target.dataset.field] = e.target.value;
+    validateStart();
+  }));
+  teamRows.querySelectorAll('.rm').forEach(btn => btn.addEventListener('click', e => {
+    teams.splice(+e.target.dataset.i,1); renderSetup(); validateStart();
+  }));
+  document.getElementById('addTeamBtn').disabled = teams.length >= 8;
+  validateStart();
+}
+function validateStart(){
+  const ok = teams.length >= 2 && teams.every(t => t.name.trim() && t.gift.trim());
+  document.getElementById('startBtn').disabled = !ok;
+}
+teams.push(defaultTeam(0)); teams.push(defaultTeam(1));
+renderSetup();
+
+document.getElementById('addTeamBtn').addEventListener('click', () => {
+  if (teams.length >= 8) return;
+  teams.push(defaultTeam(teams.length)); renderSetup();
+});
+
+document.getElementById('startBtn').addEventListener('click', () => {
+  target = Math.max(3, +document.getElementById('targetScore').value || 20);
+  document.getElementById('targetShow').textContent = target;
+  teams.forEach(t => t.score = 0);
+  finished = false;
+  document.getElementById('winnerBanner').classList.remove('show');
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('race').style.display = 'block';
+  renderLanes();
+  logTicker('Race started — waiting for live gifts...', false);
+});
+
+document.getElementById('mainMenuBtn').addEventListener('click', () => {
+  document.getElementById('race').style.display = 'none';
+  document.getElementById('setup').style.display = 'block';
+});
+document.getElementById('resetScoresBtn').addEventListener('click', () => {
+  teams.forEach(t => t.score = 0);
+  finished = false;
+  document.getElementById('winnerBanner').classList.remove('show');
+  renderLanes();
+  logTicker('Scores reset.', false);
+});
+
+function renderLanes(){
+  const lanes = document.getElementById('lanes');
+  lanes.innerHTML = '';
+  teams.forEach((t, i) => {
+    const lane = document.createElement('div');
+    lane.className = 'lane'; lane.id = 'lane-' + i;
+    lane.innerHTML = `
+      <div class="lane-top">
+        <div class="tag">${t.animal}</div>
+        <div><div class="name">${escapeHtml(t.name)}</div><div class="gift-label">Gift: ${escapeHtml(t.gift)}</div></div>
+        <div class="score" id="score-${i}">${t.score}</div>
+      </div>
+      <div class="track">
+        <div class="fill" id="fill-${i}"></div>
+        <div class="runner" id="runner-${i}" style="left:0%;">${t.animal}</div>
+        <div class="finish"></div>
+      </div>`;
+    lanes.appendChild(lane);
+  });
+  updatePositions();
+}
+function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function updatePositions(){
+  teams.forEach((t, i) => {
+    const pct = Math.min(100, (t.score / target) * 100);
+    document.getElementById('fill-' + i).style.width = pct + '%';
+    document.getElementById('runner-' + i).style.left = pct + '%';
+    document.getElementById('score-' + i).textContent = t.score;
+  });
+}
+function addPoints(i, n, source){
+  if (finished || !teams[i]) return;
+  teams[i].score += n;
+  updatePositions();
+  logTicker(`${teams[i].animal} ${teams[i].name} +${n} (${source})`, true);
+  const lane = document.getElementById('lane-' + i);
+  lane.animate([{transform:'scale(1)'},{transform:'scale(1.015)'},{transform:'scale(1)'}], {duration:250});
+  if (teams[i].score >= target) finishRace(i);
+}
+function finishRace(i){
+  finished = true;
+  document.getElementById('lane-' + i).classList.add('winner');
+  const banner = document.getElementById('winnerBanner');
+  document.getElementById('winnerEmoji').textContent = teams[i].animal;
+  document.getElementById('winnerText').textContent = `${teams[i].name} wins the race!`;
+  banner.classList.add('show');
+  logTicker(`🏁 ${teams[i].animal} ${teams[i].name} crosses the line first!`, true);
+}
+function logTicker(msg, hit){
+  const ticker = document.getElementById('ticker');
+  const line = document.createElement('div');
+  if (hit) line.classList.add('hit');
+  const time = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  line.innerHTML = `<b>${time}</b> — ${msg}`;
+  ticker.prepend(line);
+}
+
+// --- connection wiring ---
+const statusPill = document.getElementById('statusPill');
+const statusText = document.getElementById('statusText');
+const connectMsg = document.getElementById('connectMsg');
+
+document.getElementById('connectBtn').addEventListener('click', async () => {
+  const username = document.getElementById('usernameInput').value.trim();
+  if (!username) return;
+  connectMsg.textContent = 'Connecting...'; connectMsg.className = 'connect-msg';
+  await fetch('/api/connect', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ username })
+  });
+});
+
+socket.on('connectionState', (s) => {
+  statusPill.className = 'status ' + s.state;
+  if (s.state === 'connected') {
+    statusText.textContent = '@' + s.username + ' — LIVE';
+    connectMsg.textContent = 'Connected! Gifts from this live will race automatically.'; connectMsg.className = 'connect-msg';
+  } else if (s.state === 'connecting') {
+    statusText.textContent = 'Connecting...';
+  } else if (s.state === 'error') {
+    statusText.textContent = 'Error';
+    connectMsg.textContent = s.error || 'Connection failed.'; connectMsg.className = 'connect-msg err';
+  } else {
+    statusText.textContent = 'Not connected';
+    if (s.error) { connectMsg.textContent = s.error; connectMsg.className = 'connect-msg err'; }
+  }
+});
+
+socket.on('gift', (g) => {
+  const name = (g.giftName || '').trim().toLowerCase();
+  const idx = teams.findIndex(t => t.gift.trim().toLowerCase() === name);
+  if (idx >= 0) {
+    addPoints(idx, g.repeatCount || 1, `${g.sender} sent ${g.giftName}`);
+  } else if (document.getElementById('race').style.display === 'block') {
+    logTicker(`Gift "${g.giftName}" from ${g.sender} — no racer matches this name`, false);
+  }
+});
+</script>
+</body>
+</html>
