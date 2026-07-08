@@ -39,20 +39,6 @@ app.post('/api/connect', async (req, res) => {
     return res.status(500).json({ error: 'missing api key' });
   }
 
-  // Verify the user is actually live before treating the socket as "connected"
-  try {
-    const statusRes = await fetch(`https://api.tik.tools/webcast/live_status?unique_id=${encodeURIComponent(currentUsername)}&apiKey=${encodeURIComponent(apiKey)}`);
-    const statusData = await statusRes.json();
-    if (!statusData?.is_live) {
-      broadcastState('error', { error: `@${currentUsername} is not currently live on TikTok.` });
-      return res.json({ ok: true, isLive: false });
-    }
-  } catch (err) {
-    console.error('Live status check failed:', err);
-    broadcastState('error', { error: 'Could not verify live status. Try again in a moment.' });
-    return res.status(500).json({ error: 'status check failed' });
-  }
-
   tiktokClient = new TikTokLive({
     uniqueId: currentUsername,
     apiKey
@@ -66,7 +52,7 @@ app.post('/api/connect', async (req, res) => {
   tiktokClient.on('gift', data => {
     io.emit('gift', {
       giftName: data.giftName || `Gift #${data.giftId}`,
-      sender: data.user?.nickname || data.user?.uniqueId || 'someone',
+      sender: data.nickname || data.uniqueId || data.user?.nickname || data.user?.uniqueId || 'someone',
       repeatCount: data.repeatCount || 1,
       giftId: data.giftId
     });
